@@ -17,6 +17,8 @@ class CarPriceSimulator:
             "base_price": 30000,
             "age_coefficient": -2000,
             "mileage_coefficient": -0.1,
+            "age_quadratic_coefficient": 0,
+            "mileage_quadratic_coefficient": 0,
             "age_exponent": 0.5,
             "mileage_exponent": 0.5,
         }
@@ -27,11 +29,17 @@ class CarPriceSimulator:
         return self.params["noise_std"]
 
     def true_function(self, age, mileage):
+        mileage_scaled = mileage / 1000
+
         p = self.params
         return (
             p["base_price"]
-            + p["age_coefficient"] * np.power(age, p["age_exponent"])
-            + p["mileage_coefficient"] * np.power(mileage, p["mileage_exponent"])
+            + p["age_coefficient"] * age
+            + p["age_quadratic_coefficient"] * np.power(age, p["age_exponent"])
+            + p["mileage_coefficient"] * mileage_scaled
+            + p["mileage_quadratic_coefficient"]
+            * np.power(mileage_scaled, p["mileage_exponent"])
+            + np.random.normal(0, p["noise_std"], len(age))
         )
 
     def generate_data(self):

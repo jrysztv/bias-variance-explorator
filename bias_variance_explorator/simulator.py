@@ -1,11 +1,14 @@
 # %%
 import numpy as np
 import matplotlib.pyplot as plt
-import random
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import Pipeline
 
-from simulation_utils.car_price_simulator import CarPriceSimulator
-from viz_utils.viz_utils import BiasVarianceVisualization
+from bias_variance_explorator.simulation_utils.car_price_simulator import (
+    CarPriceSimulator,
+)
+from bias_variance_explorator.viz_utils.viz_utils import BiasVarianceVisualization
 
 
 class BiasVarianceExperiment:
@@ -25,7 +28,17 @@ class BiasVarianceExperiment:
         noise_std=100,
         train_n_samples=3000,
         train_seed_start=0,
-        simulator=None,
+        age_mean=5.0,
+        age_std=2.0,
+        mileage_mean=50000,
+        mileage_std=15000,
+        base_price=30000,
+        age_coefficient=-2000,
+        mileage_coefficient=-0.1,
+        age_quadratic_coefficient=0,
+        mileage_quadratic_coefficient=0,
+        age_exponent=0.5,
+        mileage_exponent=0.5,
     ):
         """
         :param n_test: number of samples in the *fixed* test set
@@ -42,6 +55,18 @@ class BiasVarianceExperiment:
         self.train_n_samples = train_n_samples
         self.train_seed_start = train_seed_start
 
+        self.age_mean = age_mean
+        self.age_std = age_std
+        self.mileage_mean = mileage_mean
+        self.mileage_std = mileage_std
+        self.base_price = base_price
+        self.age_coefficient = age_coefficient
+        self.mileage_coefficient = mileage_coefficient
+        self.age_quadratic_coefficient = age_quadratic_coefficient
+        self.mileage_quadratic_coefficient = mileage_quadratic_coefficient
+        self.age_exponent = age_exponent
+        self.mileage_exponent = mileage_exponent
+
         # We'll fill these after we run the experiment
         self.X_test = None
         self.y_test = None
@@ -52,17 +77,40 @@ class BiasVarianceExperiment:
         self.mse_list = None
         self.bias2_list = None
         self.variance_list = None
+        self.simulator = None
 
-    def run_experiment(self):
+        self.create_simulator()
+
+    def create_simulator(self):
         """
-        1) Generate one fixed test set, storing both noise-free f_test and noisy y_test.
-        2) For each run, generate fresh training data, fit, predict on fixed X_test.
-        3) Store predictions in all_predictions for later analysis.
+        Create a simulator with consistent parameters for generating the test set.
+        """
+        self.simulator = CarPriceSimulator(
+            n_samples=self.n_test,
+            noise_std=self.noise_std,
+            seed=self.test_seed,
+            age_mean=self.age_mean,
+            age_std=self.age_std,
+            mileage_mean=self.mileage_mean,
+            mileage_std=self.mileage_std,
+            base_price=self.base_price,
+            age_coefficient=self.age_coefficient,
+            mileage_coefficient=self.mileage_coefficient,
+            age_quadratic_coefficient=self.age_quadratic_coefficient,
+            mileage_quadratic_coefficient=self.mileage_quadratic_coefficient,
+            age_exponent=self.age_exponent,
+            mileage_exponent=self.mileage_exponent,
+        )
+
+    def run_experiment(self, model_type="linear"):
+        """
+        Run the bias-variance experiment for either linear or quadratic regression.
+        Ensures that both training and test datasets are generated with consistent parameters.
         """
         # 1) Build one fixed test set
-        test_sim = CarPriceSimulator(
-            n_samples=self.n_test, noise_std=self.noise_std, seed=self.test_seed
-        )
+        test_sim = (
+            self.simulator
+        )  # This simulator includes all user-specified parameters
         test_data = test_sim.generate_data()
         self.X_test = test_data[["age", "mileage"]].values
         self.y_test = test_data["price"].values  # single noisy realization
@@ -75,20 +123,43 @@ class BiasVarianceExperiment:
             # Unique seed for each run
             seed_for_run = self.train_seed_start + run_id
 
+            # Create a new training simulator with consistent parameters
             train_sim = CarPriceSimulator(
                 n_samples=self.train_n_samples,
                 noise_std=self.noise_std,
                 seed=seed_for_run,
+                age_mean=self.age_mean,
+                age_std=self.age_std,
+                mileage_mean=self.mileage_mean,
+                mileage_std=self.mileage_std,
+                base_price=self.base_price,
+                age_coefficient=self.age_coefficient,
+                mileage_coefficient=self.mileage_coefficient,
+                age_quadratic_coefficient=self.age_quadratic_coefficient,
+                mileage_quadratic_coefficient=self.mileage_quadratic_coefficient,
+                age_exponent=self.age_exponent,
+                mileage_exponent=self.mileage_exponent,
             )
+
+            # Generate training data
             train_data = train_sim.generate_data()
             X_train = train_data[["age", "mileage"]].values
             y_train = train_data["price"].values
 
-            # Fit a linear model
-            model = LinearRegression()
-            model.fit(X_train, y_train)
+            # Fit a model
+            if model_type == "linear":
+                model = LinearRegression()
+            elif model_type == "quadratic":
+                model = Pipeline(
+                    [
+                        ("poly_features", PolynomialFeatures(degree=2)),
+                        ("linear_regression", LinearRegression()),
+                    ]
+                )
+            else:
+                raise ValueError(f"Unknown model_type: {model_type}")
 
-            # Predict on the fixed test set
+            model.fit(X_train, y_train)
             preds = model.predict(self.X_test)
             all_preds.append(preds)
 
