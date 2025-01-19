@@ -1,6 +1,7 @@
 # Bias-Variance Explorator
 
 This project is a class project for Data Analysis 3 taught by Gábor Békés at CEU Vienna. The goal of this project is to explore the bias-variance tradeoff in machine learning models.
+To see the code in action, visit https://bias-variance-explorator.streamlit.app/
 
 ## Installation
 
