@@ -1,79 +1,72 @@
+# viz_utils.py
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class BiasVarianceVisualization:
     """
-    Handles visualization for Bias^2, Variance, and MSE terms, and scatter plots for simulation data.
+    Plots metrics from a MultipleRunsBiasVarianceExperiment.
+    Also can plot scatter of the fixed test set.
     """
 
     def __init__(self, experiment):
         self.experiment = experiment
 
-    def plot_bias_variance_decomposition(self, simulation_id):
+    def plot_bias_variance_decomposition(self):
         """
-        Plot a bar graph separating MSE, Bias^2, and Variance for the given simulation ID.
-        Show another bar with the sum of Bias^2, Variance, and Noise.
+        Plot MSE, Bias², Variance, and (Bias² + Var + Noise) as a function of
+        the run index k=1..n_runs.
         """
-        if any(
-            x is None
-            for x in [self.experiment.bias2_list, self.experiment.variance_list]
+        if (
+            self.experiment.mse_list is None
+            or self.experiment.bias2_list is None
+            or self.experiment.variance_list is None
         ):
-            raise ValueError(
-                "Metrics not computed! Call compute_cumulative_metrics() first."
+            raise RuntimeError(
+                "Experiment metrics not computed. Call experiment.compute_metrics() first."
             )
 
-        if simulation_id < 1 or simulation_id > self.experiment.n_runs:
-            raise ValueError("Invalid simulation ID. Must be between 1 and n_runs.")
+        ks = np.arange(1, self.experiment.n_runs + 1)
+        fig, ax = plt.subplots(figsize=(10, 6))
 
-        idx = simulation_id - 1
-        bias2 = self.experiment.bias2_list[idx]
-        variance = self.experiment.variance_list[idx]
-        mse = self.experiment.mse_list[idx]
-        noise = self.experiment.sigma2
+        ax.plot(ks, self.experiment.mse_list, label="MSE (vs. noisy y)", marker="o")
+        ax.plot(ks, self.experiment.bias2_list, label="Bias²", marker="o")
+        ax.plot(ks, self.experiment.variance_list, label="Variance", marker="o")
+        ax.plot(
+            ks,
+            self.experiment.bias2_list
+            + self.experiment.variance_list
+            + self.experiment.sigma2,
+            label="Bias² + Var + Noise",
+            linestyle="--",
+            color="purple",
+        )
 
-        # Bar plot
-        labels = ["MSE", "Bias^2 + Var + Noise"]
-        mse_parts = [bias2, variance, noise]
-        total = [sum(mse_parts)]
-
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.bar(labels[0], mse, label="MSE")
-        ax.bar(labels[1], total, label="Bias^2 + Var + Noise")
-
-        # Stacked bar for MSE breakdown
-        ax.bar(labels[0], bias2, label="Bias^2")
-        ax.bar(labels[0], variance, bottom=bias2, label="Variance")
-
-        ax.set_ylabel("Error Terms")
-        ax.set_title(f"Simulation ID: {simulation_id}")
+        ax.set_xlabel("Number of Runs (k)")
+        ax.set_ylabel("Metric Value")
+        ax.set_title("Bias–Variance Decomposition across Multiple Runs")
         ax.legend()
-        plt.show()
+        ax.grid(True)
 
-    def scatter_plot(self, simulation_id, data):
+        return fig
+
+    def plot_scatter(self, test_df, title_suffix=""):
         """
-        Plot scatter plots for price vs mileage and price vs age for the selected simulation ID.
+        Scatter plots for price vs. mileage and price vs. age for the entire test set.
         """
-        if simulation_id < 1 or simulation_id > len(data):
-            raise ValueError("Invalid simulation ID. Must match available dataset IDs.")
-
-        # Select the correct DataFrame based on simulation_id
-        selected_data = data[simulation_id - 1]  # simulation_id is 1-based
-
         fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
-        # Scatter plot: Price vs Mileage
-        axes[0].scatter(selected_data["mileage"], selected_data["price"], alpha=0.7)
-        axes[0].set_title("Price vs Mileage")
+        # Left: Price vs. Mileage
+        axes[0].scatter(test_df["mileage"], test_df["price"], alpha=0.7, color="blue")
+        axes[0].set_title(f"Price vs. Mileage {title_suffix}")
         axes[0].set_xlabel("Mileage")
         axes[0].set_ylabel("Price")
 
-        # Scatter plot: Price vs Age
-        axes[1].scatter(
-            selected_data["age"], selected_data["price"], alpha=0.7, color="orange"
-        )
-        axes[1].set_title("Price vs Age")
+        # Right: Price vs. Age
+        axes[1].scatter(test_df["age"], test_df["price"], alpha=0.7, color="orange")
+        axes[1].set_title(f"Price vs. Age {title_suffix}")
         axes[1].set_xlabel("Age")
         axes[1].set_ylabel("Price")
 
         plt.tight_layout()
-        plt.show()
+        return fig
